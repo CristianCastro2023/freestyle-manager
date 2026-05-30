@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 
 const NOMBRES_MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
 const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -13,13 +12,7 @@ function App() {
 
   // Controles de interfaz y filtros
   const [pestaña, setPestaña] = useState('proximos');
-  const [filtroTiempo, setFiltroTiempo] = useState('todos');
-  const [filtroDiaSemana, setFiltroDiaSemana] = useState('todos');
   const [busqueda, setBusqueda] = useState('');
-  const [showDetalle, setShowDetalle] = useState(null);
-  const [modoEscenario, setModoEscenario] = useState(false);
-
-  // Controla qué mes está expandido en el Historial (null significa todos cerrados)
   const [mesExpandido, setMesExpandido] = useState(null);
 
   // Formulario
@@ -27,10 +20,8 @@ function App() {
   const [nombre, setNombre] = useState('');
   const [fecha, setFecha] = useState('');
   const [lugar, setLugar] = useState('');
-  const [maps, setMaps] = useState('');
   const [monto, setMonto] = useState('');
   const [requisitos, setRequisitos] = useState('');
-  const [gastos, setGastos] = useState([]);
 
   // Guardar en LocalStorage automáticamente ante cambios
   useEffect(() => {
@@ -42,7 +33,7 @@ function App() {
     e.preventDefault();
     const datos = {
       id: editId || Math.random().toString(36).substr(2, 9),
-      nombre, fecha, lugar, maps, monto, requisitos, gastos
+      nombre, fecha, lugar, monto, requisitos
     };
 
     if (editId) {
@@ -53,7 +44,7 @@ function App() {
     }
 
     // Resetear formulario
-    setNombre(''); setFecha(''); setLugar(''); setMaps(''); setMonto(''); setRequisitos(''); setGastos([]);
+    setNombre(''); setFecha(''); setLugar(''); setMonto(''); setRequisitos('');
   };
 
   const iniciarEdición = (s) => {
@@ -61,10 +52,8 @@ function App() {
     setNombre(s.nombre);
     setFecha(s.fecha);
     setLugar(s.lugar);
-    setMaps(s.maps);
     setMonto(s.monto);
-    setRequisitos(s.requisitos);
-    setGastos(s.gastos ? s.gastos.map(g => ({ id: Math.random(), concepto: g.concepto, monto: g.monto })) : []);
+    setRequisitos(s.requisitos || '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -75,50 +64,36 @@ function App() {
   };
 
   const copiarWhatsApp = (s) => {
-    const f = new Date(s.fecha + 'T00:00:00'); // Evita desfase de zona horaria
-    const gTot = s.gastos ? s.gastos.reduce((acc, g) => acc + Number(g.monto), 0) : 0;
-    const texto = `📋 *RESUMEN DE SHOW*\n\n🔥 *Evento:* ${s.nombre}\n📅 *Fecha:* ${DIAS_SEMANA[f.getDay()]} ${f.toLocaleDateString('es-AR')}\n📍 *Lugar:* ${s.lugar}\n💰 *Monto:* $${s.monto}\n📉 *Gastos Totales:* $${gTot}\n📌 *Requisitos:* ${s.requisitos || 'Ninguno'}`;
+    // Romper la fecha año-mes-día manualmente para que no tire error de zona horaria
+    const partes = s.fecha.split('-');
+    const f = new Date(partes[0], partes[1] - 1, partes[2]);
+    
+    const texto = `📋 *RESUMEN DE SHOW*\n\n🔥 *Evento:* ${s.nombre}\n📅 *Fecha:* ${DIAS_SEMANA[f.getDay()]} ${f.toLocaleDateString('es-AR')}\n📍 *Lugar:* ${s.lugar}\n💰 *Monto:* $${s.monto}\n📌 *Requisitos:* ${s.requisitos || 'Ninguno'}`;
     navigator.clipboard.writeText(texto);
     alert("¡Copiado para WhatsApp con éxito!");
   };
 
-  // Filtrado lógico de los shows según búsqueda y filtros de tiempo/día
-  const showsFiltrados = useMemo(() => {
+  // 1. Filtrado base por barra de búsqueda
+  const showsBuscados = useMemo(() => {
     return shows.filter(show => {
-      const coincideBusqueda = show.nombre.toLowerCase().includes(busqueda.toLowerCase()) || show.lugar.toLowerCase().includes(busqueda.toLowerCase());
-      
-      const fechaShow = new Date(show.fecha + 'T00:00:00');
-      const hoy = new Date();
-      let coincideTiempo = true;
-
-      if (filtroTiempo === 'semana') {
-        const inicioSemana = new Date(hoy.setDate(hoy.getDate() - hoy.getDay()));
-        const finSemana = new Date(hoy.setDate(hoy.getDate() - hoy.getDay() + 6));
-        coincideTiempo = fechaShow >= inicioSemana && fechaShow <= finSemana;
-      } else if (filtroTiempo === 'mes') {
-        coincideTiempo = fechaShow.getMonth() === new Date().getMonth() && fechaShow.getFullYear() === new Date().getFullYear();
-      }
-
-      let coincideDia = true;
-      if (filtroDiaSemana !== 'todos') {
-        coincideDia = fechaShow.getDay() === Number(filtroDiaSemana);
-      }
-
-      return coincideBusqueda && coincideTiempo && coincideDia;
+      return show.nombre.toLowerCase().includes(busqueda.toLowerCase()) || 
+             show.lugar.toLowerCase().includes(busqueda.toLowerCase());
     });
-  }, [shows, busqueda, filtroTiempo, filtroDiaSemana]);
+  }, [shows, busqueda]);
 
-  // Separamos los próximos shows (fechas futuras o de hoy) ordenados de forma ascendente
+  // 2. Filtrado exclusivo para la pestaña de "Próximos" (De hoy en adelante)
   const proximosShows = useMemo(() => {
     const hoyStr = new Date().toISOString().slice(0, 10);
-    return showsFiltrados
+    return showsBuscados
       .filter(s => s.fecha >= hoyStr)
       .sort((a, b) => a.fecha.localeCompare(b.fecha));
-  }, [showsFiltrados]);
+  }, [showsBuscados]);
 
-  // Renderizado de una tarjeta de show con todas sus opciones completas
+  // Componente de Tarjeta de Show reutilizable con todas sus opciones recuperadas
   const RenderTarjetaShow = ({ show }) => {
-    const f = new Date(show.fecha + 'T00:00:00');
+    const partes = show.fecha.split('-');
+    const f = new Date(partes[0], partes[1] - 1, partes[2]);
+
     return (
       <div className="bg-bgCard border border-white/10 p-4 rounded-xl flex justify-between items-center transition-all hover:border-white/20 shadow-md">
         <div className="space-y-1">
@@ -199,39 +174,26 @@ function App() {
 
         {/* ================= NAVEGACIÓN DE PESTAÑAS ================= */}
         <div className="grid grid-cols-2 gap-2 mb-4">
-          <button onClick={() => setPestaña('proximos')} className={`py-2 rounded-lg text-xs font-bold tracking-wider uppercase transition-colors ${pestaña === 'proximos' ? 'bg-accentGold text-black' : 'bg-white/5 text-gray-400'}`}>
+          <button type="button" onClick={() => setPestaña('proximos')} className={`py-2 rounded-lg text-xs font-bold tracking-wider uppercase transition-colors ${pestaña === 'proximos' ? 'bg-accentGold text-black' : 'bg-white/5 text-gray-400'}`}>
             Próximos
           </button>
-          <button onClick={() => setPestaña('historial')} className={`py-2 rounded-lg text-xs font-bold tracking-wider uppercase transition-colors ${pestaña === 'historial' ? 'bg-accentGold text-black' : 'bg-white/5 text-gray-400'}`}>
+          <button type="button" onClick={() => setPestaña('historial')} className={`py-2 rounded-lg text-xs font-bold tracking-wider uppercase transition-colors ${pestaña === 'historial' ? 'bg-accentGold text-black' : 'bg-white/5 text-gray-400'}`}>
             Historial Pro
           </button>
         </div>
 
-        {/* ================= FILTROS DE BÚSQUEDA ================= */}
-        <div className="space-y-2 mb-5 bg-black/10 p-3 rounded-xl border border-white/5">
+        {/* ================= FILTRO DE BÚSQUEDA ================= */}
+        <div className="mb-5 bg-black/10 p-3 rounded-xl border border-white/5">
           <input 
             type="text" placeholder="🔍 Buscar por nombre o dirección..." value={busqueda} onChange={e => setBusqueda(e.target.value)}
             className="w-full bg-bgCard border border-white/10 p-2 rounded-lg text-xs text-white focus:outline-none"
           />
-          
-          <div className="grid grid-cols-2 gap-2">
-            <select value={filtroTiempo} onChange={e => setFiltroTiempo(e.target.value)} className="bg-bgCard border border-white/10 p-2 rounded-lg text-xs text-white focus:outline-none">
-              <option value="todos">Cualquier momento</option>
-              <option value="semana">Esta semana</option>
-              <option value="mes">Este mes</option>
-            </select>
-
-            <select value={filtroDiaSemana} onChange={e => setFiltroDiaSemana(e.target.value)} className="bg-bgCard border border-white/10 p-2 rounded-lg text-xs text-white focus:outline-none">
-              <option value="todos">Cualquier día</option>
-              {DIAS_SEMANA.map((d, i) => <option key={i} value={i}>{d}</option>)}
-            </select>
-          </div>
         </div>
 
-        {/* ================= CONTENIDO DINÁMICO DE PESTAÑAS ================= */}
+        {/* ================= LISTADO DINÁMICO DE SHOWS ================= */}
         <div className="space-y-3 min-h-[150px]">
           
-          {/* PESTAÑA 1: PRÓXIMOS (Muestra lista directa ordenada cronológicamente) */}
+          {/* PESTAÑA: PRÓXIMOS */}
           {pestaña === 'proximos' && (
             proximosShows.length === 0 ? (
               <p className="text-center text-xs text-gray-500 py-8">No hay shows futuros programados.</p>
@@ -240,15 +202,17 @@ function App() {
             )
           )}
 
-          {/* PESTAÑA 2: HISTORIAL PRO (Agrupa todos los registros usando el Acordeón Colapsable) */}
+          {/* PESTAÑA: HISTORIAL PRO (Acordeón de Meses) */}
           {pestaña === 'historial' && (
-            showsFiltrados.length === 0 ? (
-              <p className="text-center text-xs text-gray-500 py-8">Sin registros bajo los filtros actuales.</p>
+            showsBuscados.length === 0 ? (
+              <p className="text-center text-xs text-gray-500 py-8">No tienes ningún show guardado todavía.</p>
             ) : (
               NOMBRES_MESES.map((mes, index) => {
-                const showsDelMes = showsFiltrados.filter(show => {
-                  const fechaShow = new Date(show.fecha + 'T00:00:00');
-                  return fechaShow.getMonth() === index;
+                // Filtrar shows del mes usando la división limpia de la fecha
+                const showsDelMes = showsBuscados.filter(show => {
+                  const partes = show.fecha.split('-');
+                  const mesShow = parseInt(partes[1], 10) - 1; // getMonth() es indexado en 0
+                  return mesShow === index;
                 });
 
                 if (showsDelMes.length === 0) return null;
@@ -257,7 +221,7 @@ function App() {
 
                 return (
                   <div key={mes} className="border border-white/5 rounded-xl bg-bgCard/40 overflow-hidden shadow-sm">
-                    {/* BOTÓN DEL MES */}
+                    {/* BOTÓN COLAPSABLE DEL MES */}
                     <button
                       type="button"
                       onClick={() => setMesExpandido(estaAbierto ? null : index)}
@@ -271,7 +235,7 @@ function App() {
                       </span>
                     </button>
 
-                    {/* CONTENEDOR DE TARJETAS COMPLETAS */}
+                    {/* CONTENEDOR DESPLEGABLE */}
                     {estaAbierto && (
                       <div className="p-3 bg-black/20 border-t border-white/5 space-y-2.5">
                         {showsDelMes.map(show => (
