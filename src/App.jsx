@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const NOMBRES_MESES = ["ENER0", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
+const NOMBRES_MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
 const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
 function App() {
@@ -19,7 +19,7 @@ function App() {
   const [showDetalle, setShowDetalle] = useState(null);
   const [modoEscenario, setModoEscenario] = useState(false);
 
-  // NUEVO ESTADO: Controla qué mes está expandido (null significa todos cerrados)
+  // Controla qué mes está expandido en el Historial (null significa todos cerrados)
   const [mesExpandido, setMesExpandido] = useState(null);
 
   // Formulario
@@ -75,11 +75,11 @@ function App() {
   };
 
   const copiarWhatsApp = (s) => {
-    const f = new Date(s.fecha);
+    const f = new Date(s.fecha + 'T00:00:00'); // Evita desfase de zona horaria
     const gTot = s.gastos ? s.gastos.reduce((acc, g) => acc + Number(g.monto), 0) : 0;
-    const texto = `📋 *RESUMEN DE SHOW*\n\n🔥 *Evento:* ${s.nombre}\n📅 *Fecha:* ${DIAS_SEMANA[f.getDay()]} ${f.toLocaleDateString()}\n📍 *Lugar:* ${s.lugar}\n💰 *Monto:* $${s.monto}\n📉 *Gastos Totales:* $${gTot}`;
+    const texto = `📋 *RESUMEN DE SHOW*\n\n🔥 *Evento:* ${s.nombre}\n📅 *Fecha:* ${DIAS_SEMANA[f.getDay()]} ${f.toLocaleDateString('es-AR')}\n📍 *Lugar:* ${s.lugar}\n💰 *Monto:* $${s.monto}\n📉 *Gastos Totales:* $${gTot}\n📌 *Requisitos:* ${s.requisitos || 'Ninguno'}`;
     navigator.clipboard.writeText(texto);
-    alert("¡Copiado para WhatsApp!");
+    alert("¡Copiado para WhatsApp con éxito!");
   };
 
   // Filtrado lógico de los shows según búsqueda y filtros de tiempo/día
@@ -87,7 +87,7 @@ function App() {
     return shows.filter(show => {
       const coincideBusqueda = show.nombre.toLowerCase().includes(busqueda.toLowerCase()) || show.lugar.toLowerCase().includes(busqueda.toLowerCase());
       
-      const fechaShow = new Date(show.fecha);
+      const fechaShow = new Date(show.fecha + 'T00:00:00');
       const hoy = new Date();
       let coincideTiempo = true;
 
@@ -108,16 +108,67 @@ function App() {
     });
   }, [shows, busqueda, filtroTiempo, filtroDiaSemana]);
 
+  // Separamos los próximos shows (fechas futuras o de hoy) ordenados de forma ascendente
+  const proximosShows = useMemo(() => {
+    const hoyStr = new Date().toISOString().slice(0, 10);
+    return showsFiltrados
+      .filter(s => s.fecha >= hoyStr)
+      .sort((a, b) => a.fecha.localeCompare(b.fecha));
+  }, [showsFiltrados]);
+
+  // Renderizado de una tarjeta de show con todas sus opciones completas
+  const RenderTarjetaShow = ({ show }) => {
+    const f = new Date(show.fecha + 'T00:00:00');
+    return (
+      <div className="bg-bgCard border border-white/10 p-4 rounded-xl flex justify-between items-center transition-all hover:border-white/20 shadow-md">
+        <div className="space-y-1">
+          <h4 className="font-bold text-sm text-white tracking-wide">{show.nombre}</h4>
+          <p className="text-[11px] text-gray-400 flex items-center">📍 {show.lugar}</p>
+          <p className="text-[11px] text-accentGold font-bold">
+            📅 {DIAS_SEMANA[f.getDay()]} {f.toLocaleDateString('es-AR')} • 💰 ${show.monto}
+          </p>
+          {show.requisitos && (
+            <p className="text-[10px] text-gray-500 italic max-w-[200px] truncate">📌 Req: {show.requisitos}</p>
+          )}
+        </div>
+        
+        {/* BOTONES DE ACCIÓN COMPLETOS */}
+        <div className="flex items-center space-x-1.5">
+          <button 
+            onClick={() => copiarWhatsApp(show)} 
+            title="Copiar para WhatsApp" 
+            className="p-2 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 rounded-lg text-xs transition-colors"
+          >
+            🟢
+          </button>
+          <button 
+            onClick={() => iniciarEdición(show)} 
+            title="Editar Registro" 
+            className="p-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg text-xs transition-colors"
+          >
+            ✏️
+          </button>
+          <button 
+            onClick={() => eliminarRegistro(show.id)} 
+            title="Eliminar Registro" 
+            className="p-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-xs transition-colors"
+          >
+            ❌
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="w-full max-w-md mx-auto p-4">
       <div className="bg-bgCard/95 border border-white/5 rounded-2xl p-5 shadow-2xl relative">
         <header className="text-center mb-5">
-          {/* NUEVO TÍTULO MODIFICADO */}
           <h1 className="text-2xl font-black text-white tracking-wider">SHOWS DE FREESTYLE</h1>
           <p className="text-xs text-accentGold font-bold tracking-widest mt-0.5">MANAGER DASHBOARD</p>
         </header>
 
-        {/* ================= FORMULARIO RECT/NUEVO SHOW ================= */}
+        {/* ================= FORMULARIO GUARDA / EDITAR ================= */}
         <form onSubmit={manejarGuardarShow} className="space-y-3 mb-6 bg-black/20 p-4 rounded-xl border border-white/5">
           <input 
             type="text" placeholder="Nombre del Evento / Show" value={nombre} onChange={e => setNombre(e.target.value)} required
@@ -135,6 +186,10 @@ function App() {
           </div>
           <input 
             type="text" placeholder="Lugar o Establecimiento" value={lugar} onChange={e => setLugar(e.target.value)} required
+            className="w-full bg-bgCard border border-white/10 p-2.5 rounded-lg text-sm text-white focus:outline-none"
+          />
+          <input 
+            type="text" placeholder="Requisitos / Notas (opcional)" value={requisitos} onChange={e => setRequisitos(e.target.value)}
             className="w-full bg-bgCard border border-white/10 p-2.5 rounded-lg text-sm text-white focus:outline-none"
           />
           <button type="submit" className="w-full bg-green-500 hover:bg-green-600 text-black font-black text-xs py-3 rounded-lg tracking-wider uppercase transition-colors">
@@ -173,77 +228,70 @@ function App() {
           </div>
         </div>
 
-        {/* ================= RENDERIZADO EN ACORDEÓN POR MESES ================= */}
+        {/* ================= CONTENIDO DINÁMICO DE PESTAÑAS ================= */}
         <div className="space-y-3 min-h-[150px]">
-          {showsFiltrados.length === 0 ? (
-            <p className="text-center text-xs text-gray-500 py-8">Sin registros bajo los filtros actuales.</p>
-          ) : (
-            NOMBRES_MESES.map((mes, index) => {
-              // Filtrar qué shows pertenecen específicamente a este mes iterado
-              const showsDelMes = showsFiltrados.filter(show => {
-                const fechaShow = new Date(show.fecha);
-                return fechaShow.getMonth() === index;
-              });
+          
+          {/* PESTAÑA 1: PRÓXIMOS (Muestra lista directa ordenada cronológicamente) */}
+          {pestaña === 'proximos' && (
+            proximosShows.length === 0 ? (
+              <p className="text-center text-xs text-gray-500 py-8">No hay shows futuros programados.</p>
+            ) : (
+              proximosShows.map(show => <RenderTarjetaShow key={show.id} show={show} />)
+            )
+          )}
 
-              // Si el mes no contiene shows, no renderizamos la fila del mes
-              if (showsDelMes.length === 0) return null;
+          {/* PESTAÑA 2: HISTORIAL PRO (Agrupa todos los registros usando el Acordeón Colapsable) */}
+          {pestaña === 'historial' && (
+            showsFiltrados.length === 0 ? (
+              <p className="text-center text-xs text-gray-500 py-8">Sin registros bajo los filtros actuales.</p>
+            ) : (
+              NOMBRES_MESES.map((mes, index) => {
+                const showsDelMes = showsFiltrados.filter(show => {
+                  const fechaShow = new Date(show.fecha + 'T00:00:00');
+                  return fechaShow.getMonth() === index;
+                });
 
-              const estaAbierto = mesExpandido === index;
+                if (showsDelMes.length === 0) return null;
 
-              return (
-                <div key={mes} className="border border-white/5 rounded-xl bg-bgCard/40 overflow-hidden shadow-sm">
-                  {/* BOTÓN COLAPSABLE DEL MES */}
-                  <button
-                    type="button"
-                    onClick={() => setMesExpandido(estaAbierto ? null : index)}
-                    className="w-full flex justify-between items-center p-3.5 font-bold text-xs tracking-wider uppercase transition-colors hover:bg-white/5"
-                  >
-                    <span className={estaAbierto ? "text-accentGold" : "text-white"}>
-                      📁 {mes} ({showsDelMes.length})
-                    </span>
-                    <span className="text-[10px] text-gray-400 bg-white/5 px-2 py-0.5 rounded-full">
-                      {estaAbierto ? '▲ OCULTAR' : '▼ VER SHOWS'}
-                    </span>
-                  </button>
+                const estaAbierto = mesExpandido === index;
 
-                  {/* CONTENEDOR DESPLEGABLE DE LAS TARJETAS */}
-                  {estaAbierto && (
-                    <div className="p-3 bg-black/20 border-t border-white/5 space-y-2.5">
-                      {showsDelMes.map(show => (
-                        <div key={show.id} className="bg-bgCard border border-white/10 p-3 rounded-xl flex justify-between items-center transition-all hover:border-white/20">
-                          <div>
-                            <h4 className="font-bold text-sm text-white">{show.nombre}</h4>
-                            <p className="text-[11px] text-gray-400 mt-0.5">📍 {show.lugar}</p>
-                            <p className="text-[10px] text-accentGold font-medium mt-0.5">📅 {new Date(show.fecha).toLocaleDateString()} • 💰 ${show.monto}</p>
-                          </div>
-                          
-                          {/* BOTONES DE ACCIÓN DE CADA TARJETA */}
-                          <div className="flex items-center space-x-1.5">
-                            <button onClick={() => copiarWhatsApp(show)} title="Copiar Resumen" className="p-1.5 bg-white/5 hover:bg-green-500/20 rounded-md text-gray-300 hover:text-green-400 transition-colors">
-                              🟢
-                            </button>
-                            <button onClick={() => iniciarEdición(show)} title="Editar" className="p-1.5 bg-white/5 hover:bg-blue-500/20 rounded-md text-gray-300 hover:text-blue-400 transition-colors">
-                              ✏️
-                            </button>
-                            <button onClick={() => eliminarRegistro(show.id)} title="Eliminar" className="p-1.5 bg-white/5 hover:bg-red-500/20 rounded-md text-gray-300 hover:text-red-400 transition-colors">
-                              ❌
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })
+                return (
+                  <div key={mes} className="border border-white/5 rounded-xl bg-bgCard/40 overflow-hidden shadow-sm">
+                    {/* BOTÓN DEL MES */}
+                    <button
+                      type="button"
+                      onClick={() => setMesExpandido(estaAbierto ? null : index)}
+                      className="w-full flex justify-between items-center p-3.5 font-bold text-xs tracking-wider uppercase transition-colors hover:bg-white/5"
+                    >
+                      <span className={estaAbierto ? "text-accentGold" : "text-white"}>
+                        📁 {mes} ({showsDelMes.length})
+                      </span>
+                      <span className="text-[10px] text-gray-400 bg-white/5 px-2 py-0.5 rounded-full">
+                        {estaAbierto ? '▲ OCULTAR' : '▼ VER SHOWS'}
+                      </span>
+                    </button>
+
+                    {/* CONTENEDOR DE TARJETAS COMPLETAS */}
+                    {estaAbierto && (
+                      <div className="p-3 bg-black/20 border-t border-white/5 space-y-2.5">
+                        {showsDelMes.map(show => (
+                          <RenderTarjetaShow key={show.id} show={show} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )
           )}
         </div>
 
-        {/* ================= ZONA DE SEGURIDAD (RESPALDO) ================= */}
+        {/* ================= ZONA DE SEGURIDAD ================= */}
         <div className="mt-8 bg-black/30 border border-white/5 rounded-xl p-4 text-center">
           <p className="text-[11px] text-gray-400 mb-3 tracking-wide">Zona de Seguridad (Evita perder tus datos)</p>
           <div className="flex flex-col space-y-2">
             <button 
+              type="button"
               onClick={() => {
                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(shows));
                 const downloadAnchor = document.createElement('a');
