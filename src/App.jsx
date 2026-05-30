@@ -33,9 +33,57 @@ function App() {
     const [indiceCarrusel, setIndiceCarrusel] = useState(0);
     const [tiempoRestante, setTiempoRestante] = useState('');
 
+    // 🛡️ Almacenamiento Persistente Automático (Evita que el celular borre datos por falta de espacio)
+    useEffect(() => {
+        if (navigator.storage && navigator.storage.persist) {
+            navigator.storage.persist().then((persisted) => {
+                if (persisted) {
+                    console.log("¡Almacenamiento persistente activado con éxito!");
+                } else {
+                    console.log("El navegador no permitió la persistencia automática.");
+                }
+            });
+        }
+    }, []);
+
     useEffect(() => {
         localStorage.setItem('showsFreestylePro', JSON.stringify(shows));
     }, [shows]);
+
+    // 💾 Lógica de Copia de Seguridad Manual (Exportar e Importar JSON)
+    const exportarRespaldo = () => {
+        if (shows.length === 0) {
+            alert("No hay shows cargados para exportar.");
+            return;
+        }
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(shows));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", "respaldo_shows_freestyle.json");
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+    };
+
+    const importarRespaldo = (e) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const fileReader = new FileReader();
+        fileReader.readAsText(e.target.files[0], "UTF-8");
+        fileReader.onload = (event) => {
+            try {
+                const datosParseados = JSON.parse(event.target.result);
+                if (Array.isArray(datosParseados)) {
+                    setShows(datosParseados);
+                    localStorage.setItem('showsFreestylePro', JSON.stringify(datosParseados));
+                    alert("¡Copia de seguridad restaurada con éxito!");
+                } else {
+                    alert("El archivo no tiene el formato correcto.");
+                }
+            } catch (error) {
+                alert("Error al leer el archivo de respaldo.");
+            }
+        };
+    };
 
     const ahora = new Date();
     const futuros = useMemo(() => shows.filter(s => new Date(s.fecha) >= ahora).sort((a,b) => new Date(a.fecha) - new Date(b.fecha)), [shows]);
@@ -110,7 +158,7 @@ function App() {
             const f = new Date(s.fecha);
             const clave = `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}`;
             if (!grupos[clave]) grupos[clave] = [];
-            grupos[clave].push(s);
+             grupos[clave].push(s);
         });
         const clavesOrdenadas = Object.keys(grupos).sort();
         return pestaña === 'realizados' ? clavesOrdenadas.reverse().map(c => ({clave: c, items: grupos[c]})) : clavesOrdenadas.map(c => ({clave: c, items: grupos[c]}));
@@ -317,7 +365,7 @@ function App() {
                                                     </div>
                                                     <div className="flex flex-col gap-1">
                                                         <button onClick={() => iniciarEdición(s)} className="p-1.5 rounded-md bg-sky-600/20 text-sky-400 border border-sky-500/20 hover:bg-sky-600/40">✏️</button>
-                                                        <button onClick={() => eliminarRegistro(s)} className="p-1.5 rounded-md bg-red-600/20 text-red-400 border border-red-500/20 hover:bg-red-600/40">🗑️</button>
+                                                        <button onClick={() => eliminarRegistro(s.id)} className="p-1.5 rounded-md bg-red-600/20 text-red-400 border border-red-500/20 hover:bg-red-600/40">🗑️</button>
                                                     </div>
                                                 </motion.div>
                                             );
@@ -327,6 +375,30 @@ function App() {
                             );
                         })
                     )}
+                </div>
+
+                {/* 💾 NUEVA SECCIÓN: Copia de Seguridad */}
+                <div className="mt-8 p-4 bg-zinc-900/40 border border-white/5 rounded-xl text-center">
+                    <p className="text-xs text-white/40 mb-3">Zona de Seguridad (Evita perder tus datos)</p>
+                    <div className="flex flex-wrap gap-3 justify-center">
+                        <button 
+                            type="button"
+                            onClick={exportarRespaldo}
+                            className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-accentGold text-xs font-bold rounded-lg transition-colors border border-amber-500/20"
+                        >
+                            💾 Guardar Copia en Celular
+                        </button>
+                        
+                        <label className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white/80 text-xs font-bold rounded-lg transition-colors border border-white/10 cursor-pointer block">
+                            📂 Subir Copia Guardada
+                            <input 
+                                type="file" 
+                                accept=".json" 
+                                onChange={importarRespaldo} 
+                                className="hidden" 
+                            />
+                        </label>
+                    </div>
                 </div>
 
                 <AnimatePresence>
