@@ -218,7 +218,7 @@ function App() {
         <div className="w-full max-w-md mx-auto p-4">
             <div className="bg-bgCard/95 border border-white/5 rounded-2xl p-5 shadow-2xl relative">
                 <header className="text-center mb-5">
-                    <h1 className="text-2xl font-black text-white tracking-wider">FREESTYLE ARENA</h1>
+                    <h1 className="text-2xl font-black text-white tracking-wider">SHOWS DE FREESTYLE</h1>
                     <p className="text-xs text-accentGold font-bold tracking-widest mt-0.5">MANAGER DASHBOARD</p>
                 </header>
 
