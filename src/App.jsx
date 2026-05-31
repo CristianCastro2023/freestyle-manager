@@ -18,6 +18,7 @@ function App() {
     const [busqueda, setBusqueda] = useState('');
     const [showDetalle, setShowDetalle] = useState(null);
     const [modoEscenario, setModoEscenario] = useState(false);
+    const [mesExpandido, setMesExpandido] = useState(null); // <- Controla qué mes está abierto
 
     // Formulario
     const [editId, setEditId] = useState(null);
@@ -33,7 +34,7 @@ function App() {
     const [indiceCarrusel, setIndiceCarrusel] = useState(0);
     const [tiempoRestante, setTiempoRestante] = useState('');
 
-    // 🛡️ Almacenamiento Persistente Automático (Evita que el celular borre datos por falta de espacio)
+    // Almacenamiento Persistente Automático (Evita que el celular borre datos por falta de espacio)
     useEffect(() => {
         if (navigator.storage && navigator.storage.persist) {
             navigator.storage.persist().then((persisted) => {
@@ -50,7 +51,12 @@ function App() {
         localStorage.setItem('showsFreestylePro', JSON.stringify(shows));
     }, [shows]);
 
-    // 💾 Lógica de Copia de Seguridad Manual (Exportar e Importar JSON)
+    // Limpia el mes expandido si cambia de pestaña, filtros o barra de búsqueda para evitar desajustes
+    useEffect(() => {
+        setMesExpandido(null);
+    }, [pestaña, busqueda, filtroTiempo, filtroDiaSemana]);
+
+    // Lógica de Copia de Seguridad Manual (Exportar e Importar JSON)
     const exportarRespaldo = () => {
         if (shows.length === 0) {
             alert("No hay shows cargados para exportar.");
@@ -115,7 +121,7 @@ function App() {
         const actualizarReloj = () => {
             const diff = target - new Date();
             if (diff <= 0) {
-                setTiempoRestante("¡EL SHOW HA COMENZADO! ⚽");
+                setTiempoRestante("¡EL SHOW HA COMENZADO! 🎤");
                 return;
             }
             const d = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -209,7 +215,7 @@ function App() {
     const copiarWhatsApp = (s) => {
         const f = new Date(s.fecha);
         const gTot = s.gastos ? s.gastos.reduce((acc,g) => acc + g.monto, 0) : 0;
-        const texto = `📋 *RESUMEN DE SHOW*\n\n🔥 *Evento:* ${s.nombre}\n🗓️ *Fecha:* ${DIAS_SEMANA[f.getDay()]} ${f.toLocaleDateString()}\n⏰ *Hora:* ${f.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} hs\n📍 *Lugar:* ${s.lugar}\n💰 *Ganancia:* $${(s.monto - gTot).toLocaleString()}\n⚠️ *Requisitos:* ${s.requisitos || 'Ninguno'}`;
+        const texto = `📋 *RESUMEN DE SHOW*\n\n🔥 *Evento:* ${s.nombre}\n📅 *Fecha:* ${DIAS_SEMANA[f.getDay()]} ${f.toLocaleDateString()}\n🕒 *Hora:* ${f.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} hs\n📍 *Lugar:* ${s.lugar}\n💰 *Ganancia:* $${(s.monto - gTot).toLocaleString()}\n📌 *Requisitos:* ${s.requisitos || 'Ninguno'}`;
         navigator.clipboard.writeText(texto);
         alert("¡Copiado para WhatsApp!");
     };
@@ -233,7 +239,7 @@ function App() {
                         >
                             {showsDelPrimerDiaFuturo.length > 1 && (
                                 <span className="absolute top-2 right-2 bg-orange-600 text-white font-black text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                    🔥 JORNADA DOBLE ({indiceCarrusel + 1}/{showsDelPrimerDiaFuturo.length})
+                                    ⚠️ JORNADA DOBLE ({indiceCarrusel + 1}/{showsDelPrimerDiaFuturo.length})
                                 </span>
                             )}
                             <h3 className="text-xs text-zinc-500 font-bold tracking-widest uppercase mb-1">⚡ SIGUIENTE SHOW ⚡</h3>
@@ -258,7 +264,7 @@ function App() {
                     <input type="text" placeholder="Requisitos (Remera, inflador...)" value={requisitos} onChange={e => setRequisitos(e.target.value)} className="w-full bg-bgDark/80 border border-white/10 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-accentGold" />
 
                     <div className="pt-2">
-                        <p className="text-xs font-bold text-white mb-2">📉 Gastos de la Fecha</p>
+                        <p className="text-xs font-bold text-white mb-2">💸 Gastos de la Fecha</p>
                         {gastos.map((g) => (
                             <div key={g.id} className="flex gap-2 mb-2 items-center">
                                 <input type="text" placeholder="Motivo" value={g.concepto} onChange={e => {
@@ -276,7 +282,7 @@ function App() {
                     </div>
 
                     <button type="submit" className={`w-full py-3 rounded-lg text-sm font-black uppercase tracking-wider transition-colors ${editId ? 'bg-accentGold text-black' : 'bg-accentGreen text-black'}`}>
-                        {editId ? '💾 Actualizar Registro' : '➕ Guardar Show'}
+                        {editId ? '📝 Actualizar Registro' : '💾 Guardar Show'}
                     </button>
                 </form>
 
@@ -323,6 +329,7 @@ function App() {
                     </div>
                 )}
 
+                {/* LISTADO DE MESES CON EFECTO ACORDEÓN / DESPLEGABLE */}
                 <div className="mt-5 space-y-3">
                     {mesesAgrupados.length === 0 ? (
                         <p className="text-center text-xs text-zinc-600 py-6">Sin registros bajo los filtros actuales.</p>
@@ -330,54 +337,78 @@ function App() {
                         mesesAgrupados.map((g) => {
                             const [anio, mesNum] = g.clave.split('-');
                             const nombreMes = NOMBRES_MESES[parseInt(mesNum) - 1];
+                            const esEsteMesAbierto = mesExpandido === g.clave;
+
                             return (
                                 <div key={g.clave} className="space-y-2">
-                                    <div className={`text-xs font-black px-3 py-2 rounded-lg flex justify-between items-center bg-zinc-900 border-l-4 ${pestaña === 'realizados' ? 'border-accentGreen' : 'border-accentGold'}`}>
-                                        <span className="text-white tracking-wide">📅 {nombreMes} {anio}</span>
-                                        <span className="text-zinc-500 text-[10px]">{g.items.length} Shows</span>
-                                    </div>
-                                    <motion.div layout className="space-y-2">
-                                        {g.items.map((s) => {
-                                            const fObj = new Date(s.fecha);
-                                            const gTotal = s.gastos ? s.gastos.reduce((acc,g)=> acc + g.monto, 0) : 0;
-                                            const dobleAlerta = esFechaDoble(s.fecha) && pestaña === 'proximos';
-                                            return (
-                                                <motion.div 
-                                                    layout
-                                                    initial={{ opacity: 0, scale: 0.98 }}
-                                                    animate={{ opacity: 1, scale: 1 }}
-                                                    exit={{ opacity: 0, scale: 0.98 }}
-                                                    key={s.id} 
-                                                    className={`p-3 rounded-xl bg-zinc-900/60 border flex justify-between items-center gap-3 transition-colors ${dobleAlerta ? 'border-orange-500/40 bg-orange-950/10' : 'border-white/5'}`}
-                                                >
-                                                    <div onClick={() => setShowDetalle(s)} className="flex-1 min-w-0 cursor-pointer">
-                                                        <div className="flex items-center gap-1.5 mb-1">
-                                                            <span className={`text-[10px] font-black uppercase tracking-wider ${pestaña === 'realizados' ? 'text-accentGreen' : 'text-accentGold'}`}>
-                                                                {DIAS_SEMANA[fObj.getDay()]} {fObj.toLocaleDateString([], {day:'2-digit', month:'2-digit'})}
-                                                            </span>
-                                                            {dobleAlerta && <span className="text-[9px] bg-orange-600 text-white px-1.5 py-0.2 rounded font-black animate-pulse">DOBLE FECHA</span>}
-                                                        </div>
-                                                        <h4 className={`text-sm font-bold text-white truncate ${pestaña === 'realizados' ? 'line-through text-zinc-600' : ''}`}>{s.nombre}</h4>
-                                                        <p className="text-xs text-zinc-400 truncate">📍 {s.lugar}</p>
-                                                        <div className="text-[11px] text-zinc-500 mt-1">
-                                                            <span>Bruto: ${s.monto.toLocaleString()}</span> | <span className="text-accentGreen font-bold">Ganancia: ${(s.monto - gTotal).toLocaleString()}</span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <button onClick={() => iniciarEdición(s)} className="p-1.5 rounded-md bg-sky-600/20 text-sky-400 border border-sky-500/20 hover:bg-sky-600/40">✏️</button>
-                                                        <button onClick={() => eliminarRegistro(s.id)} className="p-1.5 rounded-md bg-red-600/20 text-red-400 border border-red-500/20 hover:bg-red-600/40">🗑️</button>
-                                                    </div>
-                                                </motion.div>
-                                            );
-                                        })}
-                                    </motion.div>
+                                    {/* Encabezado del mes convertible en Botón Colapsable */}
+                                    <button 
+                                        type="button"
+                                        onClick={() => setMesExpandido(esEsteMesAbierto ? null : g.clave)}
+                                        className={`w-full text-xs font-black px-3 py-2.5 rounded-lg flex justify-between items-center bg-zinc-900 border-l-4 transition-all hover:bg-zinc-800 focus:outline-none ${pestaña === 'realizados' ? 'border-accentGreen' : 'border-accentGold'}`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-zinc-500 text-[10px] w-3 text-center">
+                                                {esEsteMesAbierto ? '▼' : '►'}
+                                            </span>
+                                            <span className="text-white tracking-wide uppercase">📁 {nombreMes} {anio}</span>
+                                        </div>
+                                        <span className="text-zinc-500 text-[10px] bg-black/30 px-2 py-0.5 rounded-md">{g.items.length} Shows</span>
+                                    </button>
+                                    
+                                    {/* Muestra los shows solo cuando el usuario selecciona el mes correspondiente */}
+                                    <AnimatePresence>
+                                        {esEsteMesAbierto && (
+                                            <motion.div 
+                                                layout 
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                className="space-y-2 overflow-hidden pt-1"
+                                            >
+                                                {g.items.map((s) => {
+                                                    const fObj = new Date(s.fecha);
+                                                    const gTotal = s.gastos ? s.gastos.reduce((acc,g)=> acc + g.monto, 0) : 0;
+                                                    const dobleAlerta = esFechaDoble(s.fecha) && pestaña === 'proximos';
+                                                    return (
+                                                        <motion.div 
+                                                            layout
+                                                            initial={{ opacity: 0, scale: 0.98 }}
+                                                            animate={{ opacity: 1, scale: 1 }}
+                                                            exit={{ opacity: 0, scale: 0.98 }}
+                                                            key={s.id} 
+                                                            className={`p-3 rounded-xl bg-zinc-900/60 border flex justify-between items-center gap-3 transition-colors ${dobleAlerta ? 'border-orange-500/40 bg-orange-950/10' : 'border-white/5'}`}
+                                                        >
+                                                            <div onClick={() => setShowDetalle(s)} className="flex-1 min-w-0 cursor-pointer">
+                                                                <div className="flex items-center gap-1.5 mb-1">
+                                                                                                    <span className={`text-[10px] font-black uppercase tracking-wider ${pestaña === 'realizados' ? 'text-accentGreen' : 'text-accentGold'}`}>
+                                                                        {DIAS_SEMANA[fObj.getDay()]} {fObj.toLocaleDateString([], {day:'2-digit', month:'2-digit'})}
+                                                                    </span>
+                                                                    {dobleAlerta && <span className="text-[9px] bg-orange-600 text-white px-1.5 py-0.2 rounded font-black animate-pulse">DOBLE FECHA</span>}
+                                                                </div>
+                                                                <h4 className={`text-sm font-bold text-white truncate ${pestaña === 'realizados' ? 'line-through text-zinc-600' : ''}`}>{s.nombre}</h4>
+                                                                <p className="text-xs text-zinc-400 truncate">📍 {s.lugar}</p>
+                                                                <div className="text-[11px] text-zinc-500 mt-1">
+                                                                    <span>Bruto: ${s.monto.toLocaleString()}</span> | <span className="text-accentGreen font-bold">Ganancia: ${(s.monto - gTotal).toLocaleString()}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-col gap-1">
+                                                                <button onClick={() => iniciarEdición(s)} className="p-1.5 rounded-md bg-sky-600/20 text-sky-400 border border-sky-500/20 hover:bg-sky-600/40">📝</button>
+                                                                <button onClick={() => eliminarRegistro(s.id)} className="p-1.5 rounded-md bg-red-600/20 text-red-400 border border-red-500/20 hover:bg-red-600/40">🗑️</button>
+                                                            </div>
+                                                        </motion.div>
+                                                    );
+                                                })}
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
                             );
                         })
                     )}
                 </div>
 
-                {/* 💾 NUEVA SECCIÓN: Copia de Seguridad */}
+                {/* Copia de Seguridad */}
                 <div className="mt-8 p-4 bg-zinc-900/40 border border-white/5 rounded-xl text-center">
                     <p className="text-xs text-white/40 mb-3">Zona de Seguridad (Evita perder tus datos)</p>
                     <div className="flex flex-wrap gap-3 justify-center">
@@ -390,7 +421,7 @@ function App() {
                         </button>
                         
                         <label className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white/80 text-xs font-bold rounded-lg transition-colors border border-white/10 cursor-pointer block">
-                            📂 Subir Copia Guardada
+                            📁 Subir Copia Guardada
                             <input 
                                 type="file" 
                                 accept=".json" 
@@ -401,12 +432,13 @@ function App() {
                     </div>
                 </div>
 
+                {/* Modal Desplegable de Detalles */}
                 <AnimatePresence>
                     {showDetalle && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowDetalle(null)} className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm">
                             <motion.div initial={{ scale: 0.95, y: 15 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 15 }} onClick={e => e.stopPropagation()} className="bg-zinc-900 border-2 border-accentGold rounded-2xl w-full max-w-sm p-6 relative max-h-[85vh] overflow-y-auto">
                                 <button onClick={() => setModoEscenario(!modoEscenario)} className="absolute top-4 left-4 text-xs font-bold px-2 py-1 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
-                                    {modoEscenario ? 'Texto Normal' : '🔎 Modo Escenario'}
+                                    {modoEscenario ? 'Texto Normal' : '👀 Modo Escenario'}
                                 </button>
                                 <span onClick={() => setShowDetalle(null)} className="absolute top-3 right-4 text-2xl font-bold text-zinc-500 cursor-pointer hover:text-white">&times;</span>
                                 <div className={`mt-6 space-y-4 ${modoEscenario ? 'text-lg' : 'text-sm'}`}>
@@ -442,7 +474,7 @@ function App() {
                                         <span className="text-white font-black text-2xl">${(showDetalle.monto - (showDetalle.gastos ? showDetalle.gastos.reduce((acc,g)=> acc + g.monto, 0) : 0)).toLocaleString()}</span>
                                     </div>
                                     <div>
-                                        <span className="text-[10px] text-zinc-500 font-bold block mb-1">📉 DESGLOSE GASTOS</span>
+                                        <span className="text-[10px] text-zinc-500 font-bold block mb-1">💸 DESGLOSE GASTOS</span>
                                         {showDetalle.gastos && showDetalle.gastos.length > 0 ? (
                                             <ul className="text-xs text-zinc-400 bg-black/20 p-2.5 rounded-lg space-y-1">
                                                 {showDetalle.gastos.map((g, index) => (
@@ -456,11 +488,11 @@ function App() {
                                     </div>
                                     {showDetalle.requisitos && (
                                         <div className="bg-amber-500/10 border-l-4 border-accentGold p-3 rounded-md">
-                                            <span className="text-[10px] text-accentGold font-black block mb-0.5">⚠️ REQUISITOS</span>
+                                            <span className="text-[10px] text-accentGold font-black block mb-0.5">📌 REQUISITOS</span>
                                             <p className="text-white font-medium text-xs">{showDetalle.requisitos}</p>
                                         </div>
                                     )}
-                                    <button onClick={() => copiarWhatsApp(showDetalle)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black py-3 rounded-xl mt-2 tracking-wider flex items-center justify-center gap-2">💬 COMPARTIR POR WHATSAPP</button>
+                                    <button onClick={() => copiarWhatsApp(showDetalle)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black py-3 rounded-xl mt-2 tracking-wider flex items-center justify-center gap-2">📲 COMPARTIR POR WHATSAPP</button>
                                 </div>
                             </motion.div>
                         </motion.div>
